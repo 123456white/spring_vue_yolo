@@ -1,5 +1,5 @@
 .vscode/*
 arduino_project/*
 SpringBoot_Project/*
-vue_project/*
+vue_project/node_modules/*
 yolo_web/test/*
