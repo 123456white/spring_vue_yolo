@@ -8,12 +8,18 @@ import com.teng.VO.ResultVO;
 import com.teng.form.LoginForm;
 import com.teng.service.UdpSenderService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
-import java.io.InputStream;
+import java.io.*;
 import java.net.URLEncoder;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -142,25 +148,93 @@ public class UserController {
         return true;
     }
 
+    String uniqueFileName; //用于上传图片的名称
+    String resultfilename; //用于预测结果图片名称
     /**
-     * esp8266 消息发送接口
+     * 图片上传接口，从web传来测试图片
+     *
+     * @param file 前端上传的图片文件
+     * @return 上传结果信息
      */
-    @GetMapping("/sendudpmessage")
-    public String sendUdpMessage() {
-        udpSenderService.sendUdpMessage("这是一条来自Spring Boot的UDP消息");
-        return "UDP消息已发送";
+    @PostMapping("/uploadImage")
+    public String uploadImage(@RequestParam("image") MultipartFile file) {
+        if (file.isEmpty()) {
+            return "上传失败，请选择文件";
+        }
+        try {
+            // 定义图片保存路径，可以根据实际情况调整
+            String uploadDir = "D:\\project\\spring_vue_yolo\\yolo_web\\web";
+            File dir = new File(uploadDir);
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+            // 获取原始文件名
+            uniqueFileName =file.getOriginalFilename();
+//            System.out.println("上传的图片文件名: " + uniqueFileName);
+            File uploadFile = new File(uploadDir + File.separator + uniqueFileName);
+            file.transferTo(uploadFile);
+            return "图片上传成功";
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "图片上传失败";
+        }
     }
-    /**
-     * esp8266 消息接收接口
-     */
-//    public void addReceivedMessage(String message) {
-//        receivedMessages.add(message);
-//    }
 
-    @GetMapping("/messages")
-    public List<String> getReceivedMessages() {
-        return receivedMessages;
+    /**
+     * 图片回传接口
+     * @return 回传预测结果图片
+     */
+    @GetMapping("/getPredictedImage")
+    public ResponseEntity<byte[]> getPredictedImage() throws IOException {
+        try {
+            String pythonPath = "D:\\Conda\\envs\\yolo\\python.exe";
+            String[] pythonArgs = new String[]{pythonPath, "D:\\project\\spring_vue_yolo\\yolo_web\\serve.py", uniqueFileName};
+            ProcessBuilder pb = new ProcessBuilder(pythonArgs);
+            pb.redirectErrorStream(true);
+            Process proc = pb.start();
+
+            BufferedReader in = new BufferedReader(new InputStreamReader(proc.getInputStream()));
+            String line;
+            while ((line = in.readLine())!= null) {
+                resultfilename = line;
+                System.out.println(line);
+            }
+            in.close();
+            proc.waitFor();
+            System.out.println("Python script has finished execution.");
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        String imagePath = "D:\\project\\spring_vue_yolo\\yolo_web\\result\\"+resultfilename;
+        File file = new File(imagePath);
+        Path path = file.toPath();
+        byte[] imageBytes = Files.readAllBytes(path);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.IMAGE_JPEG);
+        headers.setContentDispositionFormData("attachment", resultfilename);
+        return new ResponseEntity<>(imageBytes, headers, HttpStatus.OK);
     }
+
+//    /**
+//     * esp8266 消息发送接口
+//     */
+//    @GetMapping("/sendudpmessage")
+//    public String sendUdpMessage() {
+//        udpSenderService.sendUdpMessage("这是一条来自Spring Boot的UDP消息");
+//        return "UDP消息已发送";
+//    }
+//    /**
+//     * esp8266 消息接收接口
+//     */
+////    public void addReceivedMessage(String message) {
+////        receivedMessages.add(message);
+////    }
+//
+//    @GetMapping("/messages")
+//    public List<String> getReceivedMessages() {
+//        return receivedMessages;
+//    }
 
 
 }
